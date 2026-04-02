@@ -1,0 +1,144 @@
+body {
+  margin: 0;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  background: #f6f6f6;
+  color: #111;
+}
+
+/* Container */
+.container {
+  max-width: 500px;
+  margin: auto;
+  padding: 20px;
+}
+
+/* Centralizar login */
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* Card estilo Uber */
+.card {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  width: 100%;
+}
+
+/* Títulos */
+h1 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Header */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+/* Inputs */
+input {
+  width: 100%;
+  padding: 14px;
+  margin-top: 12px;
+  border-radius: 10px;
+  border: 1px solid #e5e5e5;
+  font-size: 14px;
+  background: #fafafa;
+}
+
+input:focus {
+  outline: none;
+  border: 1px solid #111;
+  background: #fff;
+}
+
+/* Botão principal (estilo Uber) */
+button {
+  width: 100%;
+  padding: 14px;
+  margin-top: 15px;
+  background: #000;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #222;
+}
+
+/* Botão logout */
+.logout {
+  width: auto;
+  padding: 8px 14px;
+  background: #000;
+  border-radius: 8px;
+}
+
+/* Lista */
+.lista {
+  margin-top: 10px;
+}
+
+/* Item dívida */
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f9f9f9;
+  padding: 14px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #eee;
+}
+
+/* Nome */
+.item span {
+  font-weight: 500;
+}
+
+/* Valor */
+.item strong {
+  font-weight: 700;
+}
+
+/* Pago (verde Uber-like) */
+.item.pago {
+  background: #e6f4ea;
+  border: 1px solid #c8e6c9;
+}
+
+/* Link login */
+.link {
+  margin-top: 10px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.link span {
+  color: #000;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Pequenos detalhes */
+.card + .card {
+  margin-top: 20px;
+}
