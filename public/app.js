@@ -47,6 +47,52 @@ const api = {
         return data;
     },
 
+    // Dentro do objeto api no app.js
+async getRelatorioGeralCompleto() {
+    // Busca todas as participações não pagas de todos os usuários
+    const { data, error } = await supabaseClient
+        .from('ride_participants')
+        .select(`
+            user_id,
+            valor_parcela,
+            pago,
+            profiles:user_id(nome, email),
+            rides!inner(criado_por, profiles:criado_por(nome, email))
+        `)
+        .eq('pago', false);
+
+    if (error) throw error;
+
+    // Organiza os dados no formato: { Devedor: { Credor: Total } }
+    return data.reduce((acc, item) => {
+        const devedorNome = item.profiles.nome || item.profiles.email.split('@')[0];
+        const credorNome = item.rides.profiles.nome || item.rides.profiles.email.split('@')[0];
+        const valor = parseFloat(item.valor_parcela);
+
+        // Se o devedor é a mesma pessoa que pagou (criador), ignora
+        if (item.user_id === item.rides.criado_por) return acc;
+
+        if (!acc[devedorNome]) acc[devedorNome] = {};
+        if (!acc[devedorNome][credorNome]) acc[devedorNome][credorNome] = 0;
+
+        acc[devedorNome][credorNome] += valor;
+        return acc;
+    }, {});
+},
+
+async fecharSemana() {
+    const user = await api.getCurrentUser();
+    // Marca todas as dívidas pendentes do usuário como pagas
+    const { error } = await supabaseClient
+        .from('ride_participants')
+        .update({ pago: true })
+        .eq('user_id', user.id)
+        .eq('pago', false);
+
+    if (error) throw error;
+    return true;
+},
+
     async getDividasAgrupadas() {
         const user = await this.getCurrentUser();
         const dividas = await this.getMinhasDividas();
@@ -141,84 +187,107 @@ const api = {
 
 // --- MÓDULO DE INTERFACE (UI) ---
 const ui = {
-    async renderDashboard() {
-        const user = await api.getCurrentUser();
-        if (!user) return;
+   async renderDashboard() {
+    const user = await api.getCurrentUser();
+    if (!user) return;
 
-        const infoDiv = document.getElementById('user-info');
-        if (infoDiv) infoDiv.innerText = `Olá, ${user.email.split('@')[0]}`;
+    // 1. Saudação na Navbar
+    const infoDiv = document.getElementById('user-info');
+    if (infoDiv) infoDiv.innerText = `Olá, ${user.email.split('@')[0]}`;
 
-        const amigos = await api.getAmigos();
+    const amigos = await api.getAmigos();
 
-        try {
-            const containerCheck = document.getElementById('lista-usuarios-checkbox');
-            if (containerCheck) {
-                containerCheck.innerHTML = amigos.map(amigo => `
-                    <label class="checkbox-item">
-                        <input type="checkbox" class="user-check" value="${amigo.id}" ${amigo.id === user.id ? 'checked disabled' : ''}>
-                        ${amigo.nome || amigo.email.split('@')[0]}
-                    </label>
-                `).join('');
+    // 2. Renderizar Checkboxes (Para nova corrida)
+    try {
+        const containerCheck = document.getElementById('lista-usuarios-checkbox');
+        if (containerCheck) {
+            containerCheck.innerHTML = amigos.map(amigo => `
+                <label class="checkbox-item">
+                    <input type="checkbox" class="user-check" value="${amigo.id}" ${amigo.id === user.id ? 'checked disabled' : ''}>
+                    ${amigo.nome || amigo.email.split('@')[0]}
+                </label>
+            `).join('');
+        }
+    } catch (err) { console.error("Erro amigos:", err); }
+
+    // 3. Resumo de Dívidas (Quanto você deve para cada um)
+    try {
+        const resumo = await api.getDividasAgrupadas();
+        const containerTabs = document.getElementById('detalhe-dividas');
+        const totalPendenteEl = document.getElementById('total-pendente');
+        
+        let totalGeral = 0;
+        if (containerTabs) {
+            const ids = Object.keys(resumo);
+            if (ids.length === 0) {
+                containerTabs.innerHTML = "<small style='color: #888;'>Nenhuma dívida pendente.</small>";
+            } else {
+                containerTabs.innerHTML = ids.map(id => {
+                    totalGeral += resumo[id].total;
+                    // Formata valor com vírgula para as Tabs
+                    const valorTab = resumo[id].total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                    return `
+                        <div class="user-tab-item" 
+                             style="background:#f0f2f5; padding:8px 15px; border-radius:20px; cursor:pointer; display:inline-block; margin:5px; border:1px solid transparent;"
+                             onclick="ui.filtrarPorUsuario('${resumo[id].nome}', ${resumo[id].total})">
+                            <span style="display:block; font-size:11px; color:#65676b;">${resumo[id].nome}</span>
+                            <strong style="font-size:14px; color:#d32f2f;">R$ ${valorTab}</strong>
+                        </div>
+                    `;
+                }).join('');
             }
-        } catch (err) { console.error("Erro amigos:", err); }
+        }
+        // Atualiza o saldo total no topo com vírgula
+        if (totalPendenteEl) {
+            totalPendenteEl.innerText = `R$ ${totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        }
+    } catch (err) { console.error("Erro resumo:", err); }
 
-        try {
-            const resumo = await api.getDividasAgrupadas();
-            const containerTabs = document.getElementById('detalhe-dividas');
-            const totalPendenteEl = document.getElementById('total-pendente');
-            
-            let totalGeral = 0;
-            if (containerTabs) {
-                const ids = Object.keys(resumo);
-                if (ids.length === 0) {
-                    containerTabs.innerHTML = "<small style='color: #888;'>Nenhuma dívida pendente.</small>";
-                } else {
-                    containerTabs.innerHTML = ids.map(id => {
-                        totalGeral += resumo[id].total;
-                        return `
-                            <div class="user-tab-item" 
-                                 style="background:#eee; padding:8px 12px; border-radius:12px; cursor:pointer; display:inline-block; margin:5px; border:1px solid #ddd;"
-                                 onclick="ui.filtrarPorUsuario('${resumo[id].nome}', ${resumo[id].total})">
-                                <span style="font-size:10px; display:block; color:#666;">${resumo[id].nome}</span>
-                                <strong style="color: #d32f2f;">R$ ${resumo[id].total.toFixed(2)}</strong>
-                            </div>
-                        `;
-                    }).join('');
-                }
-            }
-            if (totalPendenteEl) totalPendenteEl.innerText = `R$ ${totalGeral.toFixed(2)}`;
-        } catch (err) { console.error("Erro resumo:", err); }
+    // 4. Histórico de Corridas (Ordenado e com Valor Total)
+    try {
+        const dividas = await api.getMinhasDividas();
+        const containerLista = document.getElementById('lista-dividas');
+        
+        if (containerLista) {
+            if (dividas.length === 0) {
+                containerLista.innerHTML = "<p style='color:#888; text-align:center;'>Nenhuma corrida encontrada.</p>";
+            } else {
+                // ORDENAÇÃO: Mais recente para a mais antiga
+                const dividasOrdenadas = dividas.sort((a, b) => 
+                    new Date(b.rides.data_corrida) - new Date(a.rides.data_corrida)
+                );
 
-        try {
-            const dividas = await api.getMinhasDividas();
-            const containerLista = document.getElementById('lista-dividas');
-            
-            if (containerLista) {
-                if (dividas.length === 0) {
-                    containerLista.innerHTML = "<p style='color:#888; text-align:center;'>Nenhuma corrida encontrada.</p>";
-                } else {
-                    containerLista.innerHTML = dividas.map(item => {
-                        const criadorId = item.rides.criado_por;
-                        const infoCriador = amigos.find(a => a.id === criadorId);
-                        const nomeCriador = criadorId === user.id ? "Você" : (infoCriador ? infoCriador.nome : "Outro");
+                containerLista.innerHTML = dividasOrdenadas.map(item => {
+                    const criadorId = item.rides.criado_por;
+                    const infoCriador = amigos.find(a => a.id === criadorId);
+                    const nomeCriador = criadorId === user.id ? "Você" : (infoCriador ? (infoCriador.nome || infoCriador.email.split('@')[0]) : "Outro");
+                    
+                    const dataFormatada = new Date(item.rides.data_corrida).toLocaleDateString('pt-BR');
+                    
+                    // Valor total formatado com vírgula
+                    const valorTotalStr = item.rides.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
-                        return `
-                            <div class="debt-item ${item.pago ? 'paid' : ''}" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; background: white; border-radius: 8px;">
-                                <div>
-                                    <strong style="display:block; font-size: 16px;">R$ ${item.valor_parcela.toFixed(2)}</strong>
-                                    <small style="color: #666;">Paga por: <b>${nomeCriador}</b></small><br>
-                                    <small style="color: #999;">${new Date(item.rides.data_corrida).toLocaleDateString()}</small>
-                                </div>
-                                <span class="badge" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; background: ${item.pago ? '#e8f5e9' : '#ffebee'}; color: ${item.pago ? '#2e7d32' : '#c62828'};">
-                                    ${item.pago ? 'Pago' : 'Pendente'}
+                    return `
+                        <div class="debt-item ${item.pago ? 'paid' : ''}" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #eee; margin-bottom: 12px; background: white; border-radius: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-size: 1.6rem; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 4px;">
+                                    ${valorTotalStr}
+                                </span>
+                                <span style="font-size: 0.8rem; color: #666; font-weight: 400;">
+                                    Paga por: ${nomeCriador} • ${dataFormatada}
                                 </span>
                             </div>
-                        `;
-                    }).join('');
-                }
+                            
+                            <span class="badge" style="padding: 6px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: ${item.pago ? '#e8f5e9' : '#ffebee'}; color: ${item.pago ? '#2e7d32' : '#c62828'};">
+                                ${item.pago ? 'Pago' : 'Pendente'}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
             }
-        } catch (err) { console.error("Erro histórico:", err); }
-    },
+        }
+    } catch (err) { console.error("Erro histórico:", err); }
+},
 
     filtrarPorUsuario(nome, valor) {
         const totalPendenteEl = document.getElementById('total-pendente');
@@ -247,7 +316,65 @@ const ui = {
         } catch (err) {
             alert("Erro: " + err.message);
         }
+    },
+
+    // Dentro do objeto ui no app.js
+// --- DENTRO DO OBJETO ui NO app.js ---
+async mostrarRelatorioSemanal() {
+    try {
+        const relatorio = await api.getRelatorioGeralCompleto();
+        const devedores = Object.keys(relatorio);
+        const corpo = document.getElementById('corpo-relatorio');
+        const modal = document.getElementById('modal-relatorio');
+
+        if (devedores.length === 0) {
+            alert("Ninguém deve nada a ninguém! Tudo limpo.");
+            return;
+        }
+
+        // Constrói os blocos por usuário
+        corpo.innerHTML = devedores.map(devedor => {
+            const dividas = relatorio[devedor];
+            const credores = Object.keys(dividas);
+            
+            // Gera a lista de quem esse usuário deve
+            const listaDividas = credores.map(credor => `
+                <div class="relatorio-sub-item">
+                    <span>para <b>${credor}</b></span>
+                    <strong>R$ ${dividas[credor].toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                </div>
+            `).join('');
+
+            return `
+                <div class="usuario-bloco">
+                    <div class="usuario-header">
+                        <i class="user-icon">👤</i> <span>${devedor} está devendo:</span>
+                    </div>
+                    <div class="usuario-dividas">
+                        ${listaDividas}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        modal.style.display = 'flex';
+    } catch (err) {
+        console.error("Erro no relatório:", err);
     }
+},
+
+fecharModal() {
+    document.getElementById('modal-relatorio').style.display = 'none';
+},
+
+async confirmarFechamento() {
+    if (confirm("Deseja realmente zerar o histórico desta semana?")) {
+        await api.fecharSemana();
+        this.fecharModal();
+        alert("Semana fechada com sucesso!");
+        location.reload(); // Recarrega para limpar tudo
+    }
+}
 };
 
 // --- FUNÇÕES GLOBAIS ---

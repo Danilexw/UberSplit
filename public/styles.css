@@ -447,3 +447,134 @@ input:focus {
     font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
 }
+
+.btn-fechamento {
+    background: #2ed573; /* Azul que você já usa como accent */
+    color: #155c32;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 15px;
+    width: 100%;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-fechamento:hover {
+    background: #1eb0dd;
+}
+
+/* --- MODAL OVERLAY --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85); /* Fundo escurecido */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: #ffffff;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 24px;
+    padding: 25px;
+    color: #000;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #888;
+}
+
+.modal-body {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.relatorio-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.relatorio-item span { color: #666; }
+.relatorio-item strong { font-size: 1.1rem; color: #d32f2f; }
+
+.aviso-footer {
+    font-size: 10px;
+    color: #999;
+    text-align: center;
+    margin-top: 10px;
+}
+
+/* --- ESTILOS DO RELATÓRIO GERAL (MODAL) --- */
+.usuario-bloco {
+    background: #f9f9f9;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #eee;
+}
+
+.usuario-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: #000;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}
+
+.usuario-dividas {
+    padding-left: 10px;
+}
+
+.relatorio-sub-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 0.95rem;
+}
+
+.relatorio-sub-item span {
+    color: #555;
+}
+
+.relatorio-sub-item strong {
+    color: #d32f2f; /* Destaque para o valor da dívida */
+}
+
+/* Scroll para o modal se o grupo for grande */
+.modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+}

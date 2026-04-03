@@ -8,6 +8,22 @@
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <link rel="icon" type="image/png" href="uberspliticon.png">
 </head>
+
+<div id="modal-relatorio" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Relatório de Fechamento</h2>
+            <button onclick="ui.fecharModal()" class="btn-close">&times;</button>
+        </div>
+        <div id="corpo-relatorio" class="modal-body">
+            </div>
+        <div class="modal-footer">
+            <button onclick="ui.confirmarFechamento()" class="btn-primary">Confirmar e Zerar Dívidas</button>
+            <p class="aviso-footer">Isso marcará todas as suas pendências atuais como PAGAS.</p>
+        </div>
+    </div>
+</div>
+
 <body>
     <nav class="navbar">
     <div class="logo-container">
@@ -38,17 +54,15 @@
         </section>
 
         <section class="stats">
-            <div class="stat-card">
-                <small>Seu saldo devedor atual</small>
-                <h2 id="total-pendente">R$ 0,00</h2>
-                
-                <div class="tabs-container">
-                    <p class="label-mini">Dívidas por pessoa:</p>
-                    <div id="detalhe-dividas" class="user-tabs">
-                        </div>
-                </div>
-            </div>
-        </section>
+    <small>Seu saldo devedor</small>
+    <h2 id="total-pendente">R$ 0,00</h2>
+    
+    <button onclick="ui.mostrarRelatorioSemanal()" class="btn-fechamento">
+        Gerar Relatório Semanal
+    </button>
+
+    <div id="detalhe-dividas" class="user-tabs"></div>
+</section>
 
         <section class="history">
             <h3>Histórico de Corridas</h3>
