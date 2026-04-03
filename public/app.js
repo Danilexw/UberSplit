@@ -25,27 +25,28 @@ const api = {
         window.location.href = 'index.html';
     },
 
-    async getMinhasDividas() {
-        const user = await this.getCurrentUser();
-        const { data, error } = await supabaseClient
-            .from('ride_participants')
-            .select(`
-                id,
-                valor_parcela,
-                pago,
-                ride_id,
-                rides (
-                    data_corrida,
-                    valor_total,
-                    criado_por
-                )
-            `)
-            .eq('user_id', user.id)
-            .order('pago', { ascending: true });
+    // No objeto api dentro do app.js
+async getMinhasDividas() {
+    const user = await this.getCurrentUser();
+    const { data, error } = await supabaseClient
+        .from('ride_participants')
+        .select(`
+            id,
+            valor_parcela,
+            pago,
+            rides (
+                data_corrida,
+                valor_total,
+                criado_por
+            )
+        `)
+        .eq('user_id', user.id)
+        .eq('pago', false) // <--- ADICIONE ESTA LINHA: Mostra apenas o que não foi fechado
+        .order('rides(data_corrida)', { ascending: false });
 
-        if (error) throw error;
-        return data;
-    },
+    if (error) throw error;
+    return data;
+},
 
     // Dentro do objeto api no app.js
 async getRelatorioGeralCompleto() {
