@@ -1,5 +1,10 @@
 {
+  "name": "ubersplit",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'No build needed'"
+  },
   "dependencies": {
-    "@supabase/supabase-js": "^2.101.1"
+    "@supabase/supabase-js": "^2.40.0"
   }
 }
