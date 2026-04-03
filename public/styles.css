@@ -1,8 +1,9 @@
 /* --- CONFIGURAÇÕES GERAIS --- */
+/* --- CONFIGURAÇÕES GERAIS --- */
 :root {
     --primary: #000000;
     --accent: #27c4f5;
-    --bg: #f8f9fa;
+    --bg: #000000;    /* <--- ALTERE DE #f8f9fa PARA #000000 */
     --card-bg: #ffffff;
     --text: #333333;
     --danger: #ff4757;
@@ -14,7 +15,9 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    /* Lista de fontes que prioriza a SF Pro da Apple */
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    -webkit-font-smoothing: antialiased; /* Deixa a fonte mais nítida no Mac */
 }
 
 body {
@@ -369,4 +372,78 @@ input:focus {
 .user-tab-item strong {
     font-size: 14px;
     color: #d32f2f; /* Vermelho para dívida */
+}
+
+.auth-icon-img {
+    width: 80px;      /* Tamanho sugerido */
+    height: auto;
+    margin-bottom: 15px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    /* Se a imagem original tiver fundo preto e você quiser remover, 
+       pode usar border-radius se for arredondada */
+    border-radius: 12px; 
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+/* Container da logo na navbar */
+.logo-container {
+    display: flex;
+    align-items: center;
+}
+
+/* Ajuste da imagem para caber na altura da navbar */
+.nav-logo-img {
+    height: 40px;      /* Altura ideal para a navbar */
+    width: auto;       /* Mantém a proporção */
+    border-radius: 8px; /* Arredondamento leve para combinar com o estilo */
+    display: block;
+}
+
+/* Garante que os itens da navbar fiquem alinhados */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: rgb(0, 0, 0);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Registro da SF Pro Display Regular */
+@font-face {
+    font-family: "SF Pro Display";
+    src: url("fonts/sf-pro-display/SFPRODISPLAYREGULAR.OTF") format("opentype");
+    font-weight: 400;
+    font-style: normal;
+}
+
+/* Registro da SF Pro Display Medium (usada para botões) */
+@font-face {
+    font-family: "SF Pro Display";
+    src: url("fonts/sf-pro-display/SFPRODISPLAYMEDIUM.OTF") format("opentype");
+    font-weight: 500;
+    font-style: normal;
+}
+
+/* Registro da SF Pro Display Bold (usada para títulos e valores) */
+@font-face {
+    font-family: "SF Pro Display";
+    src: url("fonts/sf-pro-display/SFPRODISPLAYBOLD.OTF") format("opentype");
+    font-weight: 700;
+    font-style: normal;
+}
+
+/* Aplicando a fonte em todo o site */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
 }

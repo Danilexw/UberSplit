@@ -6,13 +6,16 @@
     <title>UberSplit | Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link rel="icon" type="image/png" href="uberspliticon.png">
 </head>
 <body>
     <nav class="navbar">
-        <span class="logo">🚗 UberSplit</span>
-        <div id="user-info" class="user-greeting">Carregando...</div>
-        <button onclick="logout()" class="btn-outline">Sair</button>
-    </nav>
+    <div class="logo-container">
+        <img src="uberspliticon.png" alt="UberSplit Logo" class="nav-logo-img">
+    </div>
+    <div id="user-info" class="user-greeting">Carregando...</div>
+    <button onclick="logout()" class="btn-outline">Sair</button>
+</nav>
 
     <main class="container">
         <section class="quick-add">

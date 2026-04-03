@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UberSplit | Entrar</title>
+    
+    <link rel="icon" type="image/png" href="uberspliticon.png">
+    
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -12,7 +15,7 @@
     <div class="container center">
         <div class="auth-card">
             <div class="auth-header">
-                <span class="auth-logo">🚗 UberSplit</span>
+                <img src="uberspliticon.png" alt="Logo" class="auth-icon-img">
                 <h1>Bem-vindo de volta</h1>
                 <p>Acesse sua conta para dividir as corridas.</p>
             </div>
@@ -25,14 +28,10 @@
 
                 <div class="input-group">
                     <label>Senha</label>
-                    <input type="password" id="senha" placeholder="">
+                    <input type="password" id="senha" placeholder="*****">
                 </div>
 
-                <button onclick="login()" class="btn-primary btn-login">Entrar no Sistema</button>
-            </div>
-
-            <div class="auth-footer">
-                <p>Ainda não tem conta? <span class="link-action" onclick="register()">Criar conta agora</span></p>
+                <button onclick="login()" class="btn-primary btn-login">Entrar</button>
             </div>
         </div>
     </div>
