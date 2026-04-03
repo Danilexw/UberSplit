@@ -6,7 +6,6 @@ const CONFIG = {
 const supabaseClient = window.supabase.createClient(CONFIG.URL, CONFIG.KEY);
 
 // --- MÓDULO DE DADOS (API) ---
-// --- MÓDULO DE DADOS (API) ---
 const api = {
     async getCurrentUser() {
         const { data: { user } } = await supabaseClient.auth.getUser();
@@ -28,7 +27,6 @@ const api = {
 
     async getMinhasDividas() {
         const user = await this.getCurrentUser();
-        // Simplifiquei a query para evitar erros de relacionamento
         const { data, error } = await supabaseClient
             .from('ride_participants')
             .select(`
@@ -49,18 +47,14 @@ const api = {
         return data;
     },
 
-    // Versão mais "segura" da função de agrupar
     async getDividasAgrupadas() {
         const user = await this.getCurrentUser();
         const dividas = await this.getMinhasDividas();
         const amigos = await this.getAmigos();
-
-        // Filtra apenas o que não está pago
         const pendentes = dividas.filter(d => !d.pago);
 
         return pendentes.reduce((acc, item) => {
             const credorId = item.rides.criado_por;
-            // Busca o nome do amigo na lista de amigos que já temos
             const infoAmigo = amigos.find(a => a.id === credorId);
             const nomeCredor = infoAmigo ? (infoAmigo.nome || infoAmigo.email.split('@')[0]) : "Outro";
             
@@ -74,6 +68,8 @@ const api = {
 
     async createRide(totalValue, idsParticipantes) {
         const user = await this.getCurrentUser();
+        
+        // 1. Criar a corrida
         const { data: ride, error: rErr } = await supabaseClient
             .from('rides')
             .insert({ criado_por: user.id, valor_total: totalValue })
@@ -82,108 +78,148 @@ const api = {
         if (rErr) throw rErr;
 
         const share = totalValue / idsParticipantes.length;
-        const participants = idsParticipantes.map(id => ({
-            ride_id: ride.id,
-            user_id: id,
-            valor_parcela: share,
-            pago: id === user.id 
-        }));
 
-        const { error: iErr } = await supabaseClient.from('ride_participants').insert(participants);
-        if (iErr) throw iErr;
+        // 2. Processar cada participante com lógica de abatimento
+        for (const idAmigo of idsParticipantes) {
+            if (idAmigo === user.id) {
+                // Host já marcou como pago
+                await supabaseClient.from('ride_participants').insert({
+                    ride_id: ride.id,
+                    user_id: idAmigo,
+                    valor_parcela: share,
+                    pago: true
+                });
+                continue;
+            }
+
+            // --- LÓGICA DE ABATIMENTO (NETTING) ---
+            // Busca se EU (user.id) devo para ESSE AMIGO (idAmigo)
+            const { data: dividasAntigas } = await supabaseClient
+                .from('ride_participants')
+                .select(`id, valor_parcela, rides!inner(criado_por)`)
+                .eq('user_id', user.id)
+                .eq('rides.criado_por', idAmigo)
+                .eq('pago', false)
+                .order('valor_parcela', { ascending: true });
+
+            let valorQueAmigoMeDeveNestaCorrida = share;
+
+            if (dividasAntigas && dividasAntigas.length > 0) {
+                for (let divida of dividasAntigas) {
+                    if (valorQueAmigoMeDeveNestaCorrida <= 0) break;
+
+                    if (divida.valor_parcela <= valorQueAmigoMeDeveNestaCorrida) {
+                        // Abate a dívida inteira que eu tinha com ele
+                        valorQueAmigoMeDeveNestaCorrida -= divida.valor_parcela;
+                        await supabaseClient
+                            .from('ride_participants')
+                            .update({ pago: true, valor_parcela: 0 })
+                            .eq('id', divida.id);
+                    } else {
+                        // Abate apenas uma parte da minha dívida antiga
+                        const novoValorMinhaDivida = divida.valor_parcela - valorQueAmigoMeDeveNestaCorrida;
+                        await supabaseClient
+                            .from('ride_participants')
+                            .update({ valor_parcela: novoValorMinhaDivida })
+                            .eq('id', divida.id);
+                        valorQueAmigoMeDeveNestaCorrida = 0;
+                    }
+                }
+            }
+
+            // 3. Registrar a participação do amigo
+            // Se o valor dele chegou a 0, significa que a dívida foi totalmente abatida
+            await supabaseClient.from('ride_participants').insert({
+                ride_id: ride.id,
+                user_id: idAmigo,
+                valor_parcela: valorQueAmigoMeDeveNestaCorrida,
+                pago: valorQueAmigoMeDeveNestaCorrida <= 0
+            });
+        }
     }
 };
 
 // --- MÓDULO DE INTERFACE (UI) ---
-// --- MÓDULO DE INTERFACE (UI) ---
 const ui = {
     async renderDashboard() {
-    const user = await api.getCurrentUser();
-    if (!user) return;
+        const user = await api.getCurrentUser();
+        if (!user) return;
 
-    // 1. Nome na Navbar
-    const infoDiv = document.getElementById('user-info');
-    if (infoDiv) infoDiv.innerText = `Olá, ${user.email.split('@')[0]}`;
+        const infoDiv = document.getElementById('user-info');
+        if (infoDiv) infoDiv.innerText = `Olá, ${user.email.split('@')[0]}`;
 
-    // Buscamos os amigos uma única vez para usar como referência de nomes
-    const amigos = await api.getAmigos();
+        const amigos = await api.getAmigos();
 
-    // 2. Checkboxes dos Amigos
-    try {
-        const containerCheck = document.getElementById('lista-usuarios-checkbox');
-        if (containerCheck) {
-            containerCheck.innerHTML = amigos.map(amigo => `
-                <label class="checkbox-item">
-                    <input type="checkbox" class="user-check" value="${amigo.id}" ${amigo.id === user.id ? 'checked disabled' : ''}>
-                    ${amigo.nome || amigo.email.split('@')[0]}
-                </label>
-            `).join('');
-        }
-    } catch (err) { console.error("Erro amigos:", err); }
-
-    // 3. Renderizar Filtros (Tabs) e Saldo Total
-    try {
-        const resumo = await api.getDividasAgrupadas();
-        const containerTabs = document.getElementById('detalhe-dividas');
-        const totalPendenteEl = document.getElementById('total-pendente');
-        
-        let totalGeral = 0;
-
-        if (containerTabs) {
-            const ids = Object.keys(resumo);
-            if (ids.length === 0) {
-                containerTabs.innerHTML = "<small style='color: #888;'>Nenhuma dívida pendente.</small>";
-            } else {
-                containerTabs.innerHTML = ids.map(id => {
-                    totalGeral += resumo[id].total;
-                    return `
-                        <div class="user-tab-item" 
-                             style="background:#eee; padding:8px 12px; border-radius:12px; cursor:pointer; display:inline-block; margin:5px; border:1px solid #ddd;"
-                             onclick="ui.filtrarPorUsuario('${resumo[id].nome}', ${resumo[id].total})">
-                            <span style="font-size:10px; display:block; color:#666;">${resumo[id].nome}</span>
-                            <strong>R$ ${resumo[id].total.toFixed(2)}</strong>
-                        </div>
-                    `;
-                }).join('');
+        try {
+            const containerCheck = document.getElementById('lista-usuarios-checkbox');
+            if (containerCheck) {
+                containerCheck.innerHTML = amigos.map(amigo => `
+                    <label class="checkbox-item">
+                        <input type="checkbox" class="user-check" value="${amigo.id}" ${amigo.id === user.id ? 'checked disabled' : ''}>
+                        ${amigo.nome || amigo.email.split('@')[0]}
+                    </label>
+                `).join('');
             }
-        }
-        if (totalPendenteEl) totalPendenteEl.innerText = `R$ ${totalGeral.toFixed(2)}`;
-    } catch (err) { console.error("Erro no resumo/filtros:", err); }
+        } catch (err) { console.error("Erro amigos:", err); }
 
-    // 4. Histórico de Corridas - ATUALIZADO PARA MOSTRAR QUEM CRIOU
-    try {
-        const dividas = await api.getMinhasDividas();
-        const containerLista = document.getElementById('lista-dividas');
-        
-        if (containerLista) {
-            if (dividas.length === 0) {
-                containerLista.innerHTML = "<p style='color:#888; text-align:center;'>Nenhuma corrida encontrada.</p>";
-            } else {
-                containerLista.innerHTML = dividas.map(item => {
-                    // Busca o nome de quem criou a corrida
-                    const criadorId = item.rides.criado_por;
-                    const infoCriador = amigos.find(a => a.id === criadorId);
-                    const nomeCriador = criadorId === user.id ? "Você" : (infoCriador ? infoCriador.nome : "Outro");
-
-                    return `
-                        <div class="debt-item ${item.pago ? 'paid' : ''}" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
-                            <div>
-                                <strong style="display:block;">R$ ${item.valor_parcela.toFixed(2)}</strong>
-                                <small style="color: #666;">Paga por: <b>${nomeCriador}</b></small><br>
-                                <small style="color: #999;">${new Date(item.rides.data_corrida).toLocaleDateString()}</small>
+        try {
+            const resumo = await api.getDividasAgrupadas();
+            const containerTabs = document.getElementById('detalhe-dividas');
+            const totalPendenteEl = document.getElementById('total-pendente');
+            
+            let totalGeral = 0;
+            if (containerTabs) {
+                const ids = Object.keys(resumo);
+                if (ids.length === 0) {
+                    containerTabs.innerHTML = "<small style='color: #888;'>Nenhuma dívida pendente.</small>";
+                } else {
+                    containerTabs.innerHTML = ids.map(id => {
+                        totalGeral += resumo[id].total;
+                        return `
+                            <div class="user-tab-item" 
+                                 style="background:#eee; padding:8px 12px; border-radius:12px; cursor:pointer; display:inline-block; margin:5px; border:1px solid #ddd;"
+                                 onclick="ui.filtrarPorUsuario('${resumo[id].nome}', ${resumo[id].total})">
+                                <span style="font-size:10px; display:block; color:#666;">${resumo[id].nome}</span>
+                                <strong style="color: #d32f2f;">R$ ${resumo[id].total.toFixed(2)}</strong>
                             </div>
-                            <span class="badge" style="padding: 4px 8px; border-radius: 4px; font-size: 10px; background: ${item.pago ? '#d4edda' : '#f8d7da'}">
-                                ${item.pago ? 'Pago' : 'Pendente'}
-                            </span>
-                        </div>
-                    `;
-                }).join('');
+                        `;
+                    }).join('');
+                }
             }
-        }
-    } catch (err) { console.error("Erro histórico:", err); }
-},
+            if (totalPendenteEl) totalPendenteEl.innerText = `R$ ${totalGeral.toFixed(2)}`;
+        } catch (err) { console.error("Erro resumo:", err); }
 
-    // FUNÇÃO PARA ATUALIZAR O VALOR AO CLICAR NO FILTRO
+        try {
+            const dividas = await api.getMinhasDividas();
+            const containerLista = document.getElementById('lista-dividas');
+            
+            if (containerLista) {
+                if (dividas.length === 0) {
+                    containerLista.innerHTML = "<p style='color:#888; text-align:center;'>Nenhuma corrida encontrada.</p>";
+                } else {
+                    containerLista.innerHTML = dividas.map(item => {
+                        const criadorId = item.rides.criado_por;
+                        const infoCriador = amigos.find(a => a.id === criadorId);
+                        const nomeCriador = criadorId === user.id ? "Você" : (infoCriador ? infoCriador.nome : "Outro");
+
+                        return `
+                            <div class="debt-item ${item.pago ? 'paid' : ''}" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; background: white; border-radius: 8px;">
+                                <div>
+                                    <strong style="display:block; font-size: 16px;">R$ ${item.valor_parcela.toFixed(2)}</strong>
+                                    <small style="color: #666;">Paga por: <b>${nomeCriador}</b></small><br>
+                                    <small style="color: #999;">${new Date(item.rides.data_corrida).toLocaleDateString()}</small>
+                                </div>
+                                <span class="badge" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; background: ${item.pago ? '#e8f5e9' : '#ffebee'}; color: ${item.pago ? '#2e7d32' : '#c62828'};">
+                                    ${item.pago ? 'Pago' : 'Pendente'}
+                                </span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+        } catch (err) { console.error("Erro histórico:", err); }
+    },
+
     filtrarPorUsuario(nome, valor) {
         const totalPendenteEl = document.getElementById('total-pendente');
         if (totalPendenteEl) {
@@ -206,7 +242,7 @@ const ui = {
 
         try {
             await api.createRide(parseFloat(val), ids);
-            alert("Corrida dividida com sucesso!");
+            alert("Corrida registrada! Valores abatidos se houvesse dívida anterior.");
             location.reload();
         } catch (err) {
             alert("Erro: " + err.message);
