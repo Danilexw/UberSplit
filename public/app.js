@@ -41,7 +41,6 @@ async getMinhasDividas() {
             )
         `)
         .eq('user_id', user.id)
-        .eq('pago', false) // <--- ADICIONE ESTA LINHA: Mostra apenas o que não foi fechado
         .order('rides(data_corrida)', { ascending: false });
 
     if (error) throw error;
@@ -82,16 +81,29 @@ async getRelatorioGeralCompleto() {
 },
 
 async fecharSemana() {
-    const user = await api.getCurrentUser();
-    // Marca todas as dívidas pendentes do usuário como pagas
-    const { error } = await supabaseClient
-        .from('ride_participants')
-        .update({ pago: true })
-        .eq('user_id', user.id)
-        .eq('pago', false);
+    try {
+        // 1. Apaga participações (Dívidas)
+        // Usamos .not('id', 'is', null) que funciona para qualquer tipo de ID
+        const { error: errorPart } = await supabaseClient
+            .from('ride_participants')
+            .delete()
+            .not('id', 'is', null); 
 
-    if (error) throw error;
-    return true;
+        if (errorPart) throw errorPart;
+
+        // 2. Apaga as corridas (Histórico)
+        const { error: errorRides } = await supabaseClient
+            .from('rides')
+            .delete()
+            .not('id', 'is', null);
+
+        if (errorRides) throw errorRides;
+
+        return true;
+    } catch (error) {
+        console.error("Erro ao apagar registros:", error);
+        throw error;
+    }
 },
 
     async getDividasAgrupadas() {
@@ -369,11 +381,18 @@ fecharModal() {
 },
 
 async confirmarFechamento() {
-    if (confirm("Deseja realmente zerar o histórico desta semana?")) {
-        await api.fecharSemana();
-        this.fecharModal();
-        alert("Semana fechada com sucesso!");
-        location.reload(); // Recarrega para limpar tudo
+    if (confirm("Deseja realmente zerar o histórico de TODOS os usuários e iniciar uma nova semana?")) {
+        try {
+            await api.fecharSemana(); 
+            this.fecharModal();
+            
+            // Força a atualização da tela para refletir o banco vazio
+            await this.renderDashboard(); 
+            
+            alert("Semana encerrada para todos! O relatório e o histórico foram limpos.");
+        } catch (err) {
+            alert("Erro ao zerar semana: " + err.message);
+        }
     }
 }
 };
