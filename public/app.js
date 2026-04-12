@@ -32,9 +32,11 @@ async getMinhasDividas() {
         .from('ride_participants')
         .select(`
             id,
+            ride_id,
             valor_parcela,
             pago,
             rides (
+                id,
                 data_corrida,
                 valor_total,
                 criado_por
@@ -108,7 +110,8 @@ async fecharSemana() {
 
     async getDividasAgrupadas() {
         const user = await this.getCurrentUser();
-        const dividas = await this.getMinhasDividas();
+        const dividas = await api.getMinhasDividas();
+        console.log("Minhas dívidas:", dividas); // Olhe no console qual é o nome do campo do ID
         const amigos = await this.getAmigos();
         const pendentes = dividas.filter(d => !d.pago);
 
@@ -198,6 +201,8 @@ async fecharSemana() {
     }
 };
 
+let rideIdSendoEditado = null;
+
 // --- MÓDULO DE INTERFACE (UI) ---
 const ui = {
    async renderDashboard() {
@@ -265,7 +270,6 @@ const ui = {
             if (dividas.length === 0) {
                 containerLista.innerHTML = "<p style='color:#888; text-align:center;'>Nenhuma corrida encontrada.</p>";
             } else {
-                // ORDENAÇÃO: Mais recente para a mais antiga
                 const dividasOrdenadas = dividas.sort((a, b) => 
                     new Date(b.rides.data_corrida) - new Date(a.rides.data_corrida)
                 );
@@ -276,12 +280,13 @@ const ui = {
                     const nomeCriador = criadorId === user.id ? "Você" : (infoCriador ? (infoCriador.nome || infoCriador.email.split('@')[0]) : "Outro");
                     
                     const dataFormatada = new Date(item.rides.data_corrida).toLocaleDateString('pt-BR');
-                    
-                    // Valor total formatado com vírgula
                     const valorTotalStr = item.rides.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
+                    // AQUI ESTÁ A MUDANÇA: Pegando o ID correto que vimos no console.log
+                    const rideIdParaAcao = item.ride_id; 
+
                     return `
-                        <div class="debt-item ${item.pago ? 'paid' : ''}" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #eee; margin-bottom: 12px; background: white; border-radius: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+                        <div class="debt-item" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #eee; margin-bottom: 12px; background: white; border-radius: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
                             <div style="display: flex; flex-direction: column;">
                                 <span style="font-size: 1.6rem; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 4px;">
                                     ${valorTotalStr}
@@ -291,9 +296,16 @@ const ui = {
                                 </span>
                             </div>
                             
-                            <span class="badge" style="padding: 6px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: ${item.pago ? '#e8f5e9' : '#ffebee'}; color: ${item.pago ? '#2e7d32' : '#c62828'};">
-                                ${item.pago ? 'Pago' : 'Pendente'}
-                            </span>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                ${criadorId === user.id ? `
+                                    <button onclick="ui.excluirCorrida('${rideIdParaAcao}')" style="border:none; background:none; cursor:pointer; font-size:1.2rem;" title="Excluir">🗑️</button>
+                                    <button onclick="ui.abrirEdicao('${rideIdParaAcao}', ${item.rides.valor_total})" style="border:none; background:none; cursor:pointer; font-size:1.2rem;" title="Editar">✏️</button>
+                                ` : ''}
+                                
+                                <span class="badge" style="padding: 6px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: ${item.pago ? '#e8f5e9' : '#ffebee'}; color: ${item.pago ? '#2e7d32' : '#c62828'};">
+                                    ${item.pago ? 'Pago' : 'Pendente'}
+                                </span>
+                            </div>
                         </div>
                     `;
                 }).join('');
@@ -324,7 +336,7 @@ const ui = {
 
         try {
             await api.createRide(parseFloat(val), ids);
-            alert("Corrida registrada! Valores abatidos se houvesse dívida anterior.");
+            //alert("Corrida registrada! Valores abatidos se houvesse dívida anterior.");
             location.reload();
         } catch (err) {
             alert("Erro: " + err.message);
@@ -373,6 +385,117 @@ async mostrarRelatorioSemanal() {
         modal.style.display = 'flex';
     } catch (err) {
         console.error("Erro no relatório:", err);
+    }
+},
+// --- DENTRO DO OBJETO ui ---
+
+async excluirCorrida(rideId) {
+    if (!confirm("Tem certeza que deseja apagar esta corrida? Isso limpará o histórico e as dívidas dela.")) return;
+
+    try {
+        // 1. Primeiro removemos os participantes (filhos)
+        const { error: errorPart } = await supabaseClient
+            .from('ride_participants')
+            .delete()
+            .eq('ride_id', rideId);
+        
+        if (errorPart) throw errorPart;
+
+        // 2. Depois removemos a corrida (pai)
+        const { error: errorRide } = await supabaseClient
+            .from('rides')
+            .delete()
+            .eq('id', rideId);
+
+        if (errorRide) throw errorRide;
+
+        //alert("Corrida excluída com sucesso!");
+        
+        // 3. Forçar atualização completa
+        await this.renderDashboard(); 
+    } catch (err) {
+        console.error("Erro ao excluir:", err);
+        alert("Erro ao excluir no banco de dados. Verifique sua conexão ou permissões.");
+    }
+},
+
+// --- SUBSTITUA A abrirEdicao ANTIGA POR ESTA ---
+async abrirEdicao(rideId, valorAtual) {
+    rideIdSendoEditado = rideId;
+    const modal = document.getElementById('modal-editar');
+    const inputValor = document.getElementById('edit-valor');
+    const containerAmigos = document.getElementById('edit-lista-amigos');
+    
+    inputValor.value = valorAtual;
+    modal.style.display = 'flex';
+
+    try {
+        const amigos = await api.getAmigos();
+        const user = await api.getCurrentUser();
+        
+        // Busca quem já estava na corrida para marcar os boxes
+        const { data: atuais } = await supabaseClient
+            .from('ride_participants')
+            .select('user_id')
+            .eq('ride_id', rideId);
+
+        const idsAtuais = atuais.map(p => p.user_id);
+
+        containerAmigos.innerHTML = amigos.map(amigo => `
+            <label class="checkbox-item">
+                <input type="checkbox" class="edit-user-check" value="${amigo.id}" 
+                    ${idsAtuais.includes(amigo.id) ? 'checked' : ''}
+                    ${amigo.id === user.id ? 'checked disabled' : ''}>
+                ${amigo.nome || amigo.email.split('@')[0]}
+            </label>
+        `).join('');
+
+        // Configura o clique do botão salvar
+        document.getElementById('btn-salvar-edicao').onclick = () => ui.salvarEdicao();
+    } catch (err) {
+        console.error(err);
+    }
+},
+
+fecharModalEditar() {
+    document.getElementById('modal-editar').style.display = 'none';
+    rideIdSendoEditado = null;
+},
+
+async salvarEdicao() {
+    const novoValor = parseFloat(document.getElementById('edit-valor').value);
+    const checks = document.querySelectorAll('.edit-user-check:checked');
+    const user = await api.getCurrentUser();
+    
+    let novosParticipantesIds = Array.from(checks).map(c => c.value);
+    if (!novosParticipantesIds.includes(user.id)) novosParticipantesIds.push(user.id);
+
+    if (isNaN(novoValor) || novosParticipantesIds.length === 0) {
+        alert("Dados inválidos!");
+        return;
+    }
+
+    try {
+        // 1. Atualiza valor da corrida
+        await supabaseClient.from('rides').update({ valor_total: novoValor }).eq('id', rideIdSendoEditado);
+
+        // 2. Limpa e refaz participantes
+        await supabaseClient.from('ride_participants').delete().eq('ride_id', rideIdSendoEditado);
+        
+        const share = novoValor / novosParticipantesIds.length;
+        const novosDados = novosParticipantesIds.map(id => ({
+            ride_id: rideIdSendoEditado,
+            user_id: id,
+            valor_parcela: share,
+            pago: (id === user.id)
+        }));
+
+        await supabaseClient.from('ride_participants').insert(novosDados);
+
+        //alert("Corrida atualizada!");
+        window.location.reload();
+    } catch (err) {
+        alert("Erro ao salvar: " + err.message);
     }
 },
 
